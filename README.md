@@ -209,9 +209,17 @@ oc logs <pod-name> -n <namespace>
 
 ## Links
 
-- [Quickstart Guide](../specs/001-cloud-native-ansible-lifecycle/quickstart.md)
-- [Constitution](../.specify/memory/constitution.md)
-- [Data Model](../specs/001-cloud-native-ansible-lifecycle/data-model.md)
+### Related Repositories
+- **AAP Config as Code**: https://github.com/djdanielsson/rh1-aap-config-as-code
+- **Ansible Collection**: https://github.com/djdanielsson/rh1-custom-collection
+- **Execution Environment**: https://github.com/djdanielsson/rh1-custom-ee
+- **Release Manifests**: https://github.com/djdanielsson/rh1-release-manifest
+
+### Documentation
+- **Project Workspace**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle
+- **Quickstart Guide**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/blob/main/specs/001-cloud-native-ansible-lifecycle/quickstart.md
+- **Constitution**: https://github.com/djdanielsson/rh1_ansible_code_lifecycle/blob/main/.specify/memory/constitution.md
+
 
 ---
 
