@@ -1,0 +1,33 @@
+---
+name: Pre-commit Checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  pre-commit:
+    name: Run Pre-commit Hooks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          # Note: No pip cache - this repo has no Python dependencies
+
+      # Use official pre-commit action
+      # Handles caching, environment management, and tool installation automatically
+      # Pre-commit will manage: gitleaks, detect-secrets, yamllint, etc.
+      - name: Run pre-commit hooks
+        uses: pre-commit/action@v3.0.1
+        with:
+          extra_args: --all-files --show-diff-on-failure
+
+
+

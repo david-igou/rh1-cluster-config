@@ -1,27 +1,124 @@
-# Temporary files
-*.tmp
-*.swp
-*~
-.DS_Store
+# Cluster Config .gitignore
+# Generated files and local configuration
 
-# Editor directories
+# IDE / Editor
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.project
+.settings/
+.classpath
 
-# Generated files
-*.generated.yaml
-
-# Secrets (should never be in Git per Constitution Article V)
-*secret*.yaml
-*password*
-*token*
+# Kubernetes / OpenShift secrets and sensitive data
+*-secret.yaml
+*-secret.yml
+**/secrets/
 *.key
+*.crt
 *.pem
+*.pfx
+*.p12
+kubeconfig
+.kubeconfig
+**/kubeconfig.*
 
-# Backup files
+# Kustomize build output
+kustomization.yaml.bak
+*.orig
+
+# Helm
+charts/
+*.tgz
+requirements.lock
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.log
 *.bak
 *.backup
 
-# Test outputs
-test-results/
+# ArgoCD local files
+.argocd-source-*
+.argocd-cache/
 
+# Tekton local testing
+.tekton-local/
+pipeline-run-*.yaml
+taskrun-*.yaml
+
+# Local testing
+test-output/
+debug/
+local/
+
+# Pre-commit
+.pre-commit-config.yaml.backup
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Node.js (if using any JS tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# macOS
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# Local overrides (for developers)
+*.local
+*.local.*
+local-*.yaml
+local-*.yml
+override-*.yaml
+override-*.yml
+
+# Documentation build artifacts
+docs/_build/
+docs/.doctrees/
+site/
+
+# Ignore any file with 'local' or 'override' in the name
+*local*
+*override*
+
+# Keep important template/example files
+!example-*.yaml
+!example-*.yml
+!template-*.yaml
+!template-*.yml
