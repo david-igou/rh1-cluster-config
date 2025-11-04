@@ -129,7 +129,8 @@ repos:
     hooks:
       - id: tekton-lint
         name: Tekton YAML Lint
-        entry: bash -c 'if command -v tkn &> /dev/null; then for f in "$@"; do echo "Validating $f"; done; else echo "tkn CLI not found, skipping Tekton validation"; fi'
+        entry: |
+          bash -c 'if command -v tkn &> /dev/null; then for f in "$@"; do echo "Validating $f"; done; else echo "tkn CLI not found, skipping Tekton validation"; fi'
         language: system
         files: ^tekton/.*\.(yaml|yml)$
         pass_filenames: true
@@ -141,7 +142,15 @@ repos:
     hooks:
       - id: argocd-validation
         name: ArgoCD Application Validation
-        entry: bash -c 'for f in "$@"; do echo "Checking ArgoCD app: $f"; grep -q "apiVersion: argoproj.io" "$f" || exit 0; grep -q "kind: Application" "$f" || { echo "Invalid ArgoCD Application: $f"; exit 1; }; done'
+        entry: |
+          bash -c 'for f in "$@"; do 
+            echo "Checking ArgoCD app: $f"
+            grep -q "apiVersion: argoproj.io" "$f" || exit 0
+            grep -q "kind: Application" "$f" || { 
+              echo "Invalid ArgoCD Application: $f"
+              exit 1
+            }
+          done'
         language: system
         files: ^argocd/.*\.(yaml|yml)$
         pass_filenames: true
@@ -153,7 +162,16 @@ repos:
     hooks:
       - id: constitution-compliance
         name: Constitution Compliance Check
-        entry: bash -c 'echo "Checking Constitution Compliance..."; for f in "$@"; do if grep -i "password\|secret\|token\|api[_-]key" "$f" | grep -v "secretRef\|secretKeyRef\|SecretName" | grep -v "^#"; then echo "❌ VIOLATION: Possible secret in $f"; echo "Constitution Article V: No secrets in Git"; exit 1; fi; done; echo "✅ No secrets detected"'
+        entry: |
+          bash -c 'echo "Checking Constitution Compliance..."
+          for f in "$@"; do 
+            if grep -i "password\|secret\|token\|api[_-]key" "$f" | grep -v "secretRef\|secretKeyRef\|SecretName" | grep -v "^#"; then 
+              echo "❌ VIOLATION: Possible secret in $f"
+              echo "Constitution Article V: No secrets in Git"
+              exit 1
+            fi
+          done
+          echo "✅ No secrets detected"'
         language: system
         files: \.(yaml|yml)$
         pass_filenames: true
@@ -165,7 +183,8 @@ repos:
     hooks:
       - id: namespace-naming
         name: Namespace Naming Convention
-        entry: bash -c 'for f in "$@"; do if [[ "$f" == namespaces/* ]]; then grep -q "name: aap-" "$f" || { echo "❌ Namespace must start with aap-: $f"; exit 1; }; fi; done'
+        entry: |
+          bash -c 'for f in "$@"; do if [[ "$f" == namespaces/* ]]; then grep -q "name: aap-" "$f" || { echo "❌ Namespace must start with aap-: $f"; exit 1; }; fi; done'
         language: system
         files: ^namespaces/.*\.(yaml|yml)$
         pass_filenames: true
@@ -177,7 +196,8 @@ repos:
     hooks:
       - id: rbac-check
         name: RBAC Least Privilege Check
-        entry: bash -c 'for f in "$@"; do if grep -q "ClusterRole\|ClusterRoleBinding" "$f"; then if grep -q "- \"\*\"" "$f" || grep -q "cluster-admin" "$f"; then echo "⚠️  WARNING: ClusterRole with broad permissions in $f"; echo "Consider namespace-scoped RBAC (Article V)"; fi; fi; done'
+        entry: |
+          bash -c 'for f in "$@"; do if grep -q "ClusterRole\|ClusterRoleBinding" "$f"; then if grep -q "- \"\*\"" "$f" || grep -q "cluster-admin" "$f"; then echo "⚠️  WARNING: ClusterRole with broad permissions in $f"; echo "Consider namespace-scoped RBAC (Article V)"; fi; fi; done'
         language: system
         files: ^rbac/.*\.(yaml|yml)$
         pass_filenames: true
@@ -189,7 +209,8 @@ repos:
     hooks:
       - id: no-latest-tags
         name: No Latest Tags in Production
-        entry: bash -c 'for f in "$@"; do if [[ "$f" == aap-instances/automation-controller-prod.yaml ]]; then if grep -q ":latest" "$f"; then echo "❌ VIOLATION: latest tag not allowed in production: $f"; echo "Constitution Article III: Atomic Promotion requires locked versions"; exit 1; fi; fi; done'
+        entry: |
+          bash -c 'for f in "$@"; do if [[ "$f" == aap-instances/automation-controller-prod.yaml ]]; then if grep -q ":latest" "$f"; then echo "❌ VIOLATION: latest tag not allowed in production: $f"; echo "Constitution Article III: Atomic Promotion requires locked versions"; exit 1; fi; fi; done'
         language: system
         files: ^aap-instances/.*\.(yaml|yml)$
         pass_filenames: true
@@ -201,7 +222,8 @@ repos:
     hooks:
       - id: readme-check
         name: README Exists Check
-        entry: bash -c 'if [ ! -f README.md ]; then echo "⚠️  WARNING: README.md not found"; exit 1; fi'
+        entry: |
+          bash -c 'if [ ! -f README.md ]; then echo "⚠️  WARNING: README.md not found"; exit 1; fi'
         language: system
         pass_filenames: false
         always_run: true
