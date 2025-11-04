@@ -1,0 +1,241 @@
+# DevWorkspace definition for OpenShift Dev Spaces / Eclipse Che
+# Used for cloud-native development on OpenShift
+schemaVersion: 2.2.0
+metadata:
+  name: cluster-config
+  version: 1.0.0
+  displayName: Cluster Config Development
+  description: Development environment for Kubernetes/OpenShift cluster configuration with ArgoCD and Tekton
+  tags:
+    - Kubernetes
+    - OpenShift
+    - ArgoCD
+    - Tekton
+    - GitOps
+  projectType: kubernetes
+  language: yaml
+  provider: Red Hat
+  supportUrl: https://github.com/your-org/rh1_ansible_code_lifecycle
+
+# Parent devfile - use Universal Developer Image
+parent:
+  id: universal-developer-image
+  registryUrl: https://registry.devfile.io
+
+# Components - containers, volumes, plugins
+components:
+  # Main development container
+  - name: tools
+    container:
+      image: quay.io/devfile/universal-developer-image:latest
+      memoryLimit: 4Gi
+      memoryRequest: 1Gi
+      cpuLimit: 2000m
+      cpuRequest: 500m
+      mountSources: true
+      volumeMounts:
+        - name: cache
+          path: /home/user/.cache
+      env:
+        - name: KUBECONFIG
+          value: /home/user/.kube/config
+      endpoints:
+        - name: health
+          targetPort: 8080
+          exposure: internal
+
+  # Volume for caching
+  - name: cache
+    volume:
+      size: 2Gi
+
+  # VS Code extensions
+  - name: vscode-kubernetes
+    plugin:
+      id: ms-kubernetes-tools/vscode-kubernetes-tools/latest
+
+  - name: vscode-yaml
+    plugin:
+      id: redhat/vscode-yaml/latest
+
+# Commands - tasks that can be executed
+commands:
+  # Setup commands
+  - id: install-tools
+    exec:
+      label: "Install Development Tools"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        # Install yq
+        VERSION=v4.40.5
+        wget -q https://github.com/mikefarah/yq/releases/download/${VERSION}/yq_linux_amd64 -O /tmp/yq
+        sudo mv /tmp/yq /usr/local/bin/yq
+        sudo chmod +x /usr/local/bin/yq
+        
+        # Install kustomize
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+        
+        # Install kubeconform
+        VERSION=v0.6.4
+        wget -q https://github.com/yannh/kubeconform/releases/download/${VERSION}/kubeconform-linux-amd64.tar.gz
+        tar xf kubeconform-linux-amd64.tar.gz
+        sudo mv kubeconform /usr/local/bin/
+        
+        # Install Tekton CLI
+        curl -LO https://github.com/tektoncd/cli/releases/download/v0.33.0/tkn_0.33.0_Linux_x86_64.tar.gz
+        tar xvzf tkn_0.33.0_Linux_x86_64.tar.gz -C /tmp/
+        sudo mv /tmp/tkn /usr/local/bin/
+        
+        # Install ArgoCD CLI
+        VERSION=$(curl -L -s https://raw.githubusercontent.com/argoproj/argo-cd/stable/VERSION)
+        curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/download/v$VERSION/argocd-linux-amd64
+        sudo install -m 555 /tmp/argocd /usr/local/bin/argocd
+        
+        # Install Python tools
+        pip install --user yamllint pre-commit
+        
+        echo "✅ Tools installed successfully"
+      group:
+        kind: build
+        isDefault: false
+
+  - id: setup-precommit
+    exec:
+      label: "Setup Pre-commit Hooks"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        if [ -f .pre-commit-config.yaml ]; then
+          pre-commit install
+          pre-commit install --hook-type commit-msg
+          echo "✅ Pre-commit hooks installed"
+        else
+          echo "⚠️  No .pre-commit-config.yaml found"
+        fi
+      group:
+        kind: build
+        isDefault: false
+
+  # Validation commands
+  - id: validate-yaml
+    exec:
+      label: "Validate YAML Files"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: yamllint .
+      group:
+        kind: test
+        isDefault: false
+
+  - id: validate-kubernetes
+    exec:
+      label: "Validate Kubernetes Resources"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        kubeconform -strict -summary \
+          namespaces/*.yaml \
+          operators/*.yaml \
+          aap-instances/*.yaml \
+          rbac/*.yaml \
+          argocd/**/*.yaml \
+          tekton/**/*.yaml
+      group:
+        kind: test
+        isDefault: true
+
+  - id: validate-tekton
+    exec:
+      label: "Validate Tekton Resources"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        for file in tekton/tasks/*.yaml; do
+          echo "Validating $file..."
+          tkn task describe -f $file > /dev/null || exit 1
+        done
+        echo "✅ All Tekton tasks are valid"
+      group:
+        kind: test
+        isDefault: false
+
+  - id: lint-all
+    exec:
+      label: "Run All Linters"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        echo "Running yamllint..."
+        yamllint . || true
+        echo ""
+        echo "Running kubeconform..."
+        kubeconform -strict -summary namespaces/ operators/ aap-instances/ rbac/ argocd/ tekton/ || true
+        echo ""
+        echo "✅ Linting complete"
+      group:
+        kind: test
+        isDefault: false
+
+  # Development commands
+  - id: kustomize-build
+    exec:
+      label: "Build Kustomize Overlays"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        if [ -d overlays ]; then
+          for overlay in overlays/*; do
+            echo "Building $(basename $overlay)..."
+            kustomize build $overlay
+          done
+        else
+          echo "ℹ️  No kustomize overlays found"
+        fi
+      group:
+        kind: build
+        isDefault: false
+
+  - id: argocd-diff
+    exec:
+      label: "ArgoCD Application Diff"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: |
+        if [ -z "$ARGOCD_SERVER" ]; then
+          echo "⚠️  ARGOCD_SERVER not set"
+          exit 1
+        fi
+        argocd app diff root-app --local argocd/root-app.yaml
+      group:
+        kind: run
+        isDefault: false
+
+  # Git commands
+  - id: git-status
+    exec:
+      label: "Git Status"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: git status
+      group:
+        kind: run
+        isDefault: false
+
+  - id: pre-commit-run
+    exec:
+      label: "Run Pre-commit Checks"
+      component: tools
+      workingDir: ${PROJECT_SOURCE}
+      commandLine: pre-commit run --all-files
+      group:
+        kind: test
+        isDefault: false
+
+# Events - automatic actions
+events:
+  postStart:
+    - install-tools
+    - setup-precommit
+

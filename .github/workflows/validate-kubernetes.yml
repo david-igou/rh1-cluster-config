@@ -1,0 +1,204 @@
+---
+name: Validate Kubernetes Resources
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'aap-instances/**'
+      - 'argocd/**'
+      - 'namespaces/**'
+      - 'operators/**'
+      - 'rbac/**'
+      - 'tekton/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'aap-instances/**'
+      - 'argocd/**'
+      - 'namespaces/**'
+      - 'operators/**'
+      - 'rbac/**'
+      - 'tekton/**'
+
+jobs:
+  validate-yaml:
+    name: Validate YAML Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Run yamllint
+        run: yamllint -c .yamllint .
+
+  validate-kubernetes:
+    name: Validate K8s Resources
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubeval
+        run: |
+          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin
+
+      - name: Validate Kubernetes resources
+        run: |
+          # Validate all YAML files except ArgoCD CRDs and Tekton
+          find . -name '*.yaml' -o -name '*.yml' | \
+            grep -v '.github' | \
+            grep -v 'argocd' | \
+            grep -v 'tekton' | \
+            xargs kubeval --ignore-missing-schemas || true
+
+  validate-argocd:
+    name: Validate ArgoCD Applications
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate ArgoCD Applications
+        run: |
+          echo "Validating ArgoCD Applications..."
+          for file in argocd/**/*.yaml; do
+            if [ -f "$file" ]; then
+              echo "Checking $file"
+              
+              # Check if it's an ArgoCD Application
+              if grep -q "kind: Application" "$file"; then
+                # Validate required fields
+                yq eval '.apiVersion' "$file" | grep -q "argoproj.io" || { echo "❌ Invalid apiVersion in $file"; exit 1; }
+                yq eval '.metadata.name' "$file" | grep -q "." || { echo "❌ Missing name in $file"; exit 1; }
+                yq eval '.spec.source.repoURL' "$file" | grep -q "." || { echo "❌ Missing repoURL in $file"; exit 1; }
+                echo "✅ $file is valid"
+              fi
+            fi
+          done
+
+  check-secrets:
+    name: Check for Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install detect-secrets
+        run: pip install detect-secrets
+
+      - name: Run detect-secrets
+        run: |
+          detect-secrets scan --baseline .secrets.baseline
+          
+      - name: Install gitleaks
+        run: |
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.1_linux_x64.tar.gz
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Run gitleaks
+        run: gitleaks detect --source . --verbose
+
+  constitutional-compliance:
+    name: Constitutional Compliance Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for production latest tags
+        run: |
+          echo "Checking for :latest tags in production..."
+          if grep -r ":latest" aap-instances/*-prod.yaml 2>/dev/null; then
+            echo "❌ VIOLATION: Found :latest tag in production configuration"
+            echo "Constitution Article III: Production requires locked versions"
+            exit 1
+          fi
+          echo "✅ No :latest tags in production"
+
+      - name: Check namespace naming
+        run: |
+          echo "Checking namespace naming convention..."
+          for file in namespaces/*.yaml; do
+            if [ -f "$file" ]; then
+              name=$(yq eval '.metadata.name' "$file")
+              if [[ ! "$name" =~ ^aap- ]]; then
+                echo "❌ Namespace must start with aap-: $name in $file"
+                exit 1
+              fi
+            fi
+          done
+          echo "✅ All namespaces follow naming convention"
+
+      - name: Check RBAC least privilege
+        run: |
+          echo "Checking RBAC for cluster-admin usage..."
+          if grep -r "cluster-admin" rbac/*.yaml 2>/dev/null; then
+            echo "⚠️  WARNING: Found cluster-admin in RBAC configuration"
+            echo "Consider namespace-scoped permissions (Article V)"
+          fi
+          echo "✅ RBAC check complete"
+
+  lint-report:
+    name: Generate Lint Report
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install tools
+        run: pip install yamllint
+
+      - name: Generate report
+        run: |
+          echo "# Kubernetes Resources Validation Report" > report.md
+          echo "" >> report.md
+          echo "## YAML Lint Results" >> report.md
+          yamllint -f parsable . > lint.txt 2>&1 || true
+          echo '```' >> report.md
+          cat lint.txt >> report.md
+          echo '```' >> report.md
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('report.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+
+

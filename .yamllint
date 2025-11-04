@@ -1,0 +1,69 @@
+---
+# YAML Lint Configuration for cluster-config
+# Kubernetes and ArgoCD YAML files
+
+extends: default
+
+rules:
+  # Line length - allow longer lines for Kubernetes resources
+  line-length:
+    max: 160
+    level: warning
+
+  # Indentation - 2 spaces (Kubernetes standard)
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  # Comments - require space after #
+  comments:
+    require-starting-space: true
+    min-spaces-from-content: 1
+
+  # Document start --- is optional
+  document-start:
+    present: false
+
+  # Allow empty values (common in Kubernetes)
+  empty-values:
+    forbid-in-block-mappings: false
+    forbid-in-flow-mappings: true
+
+  # Truthy values - allow yes/no/on/off (Kubernetes convention)
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
+    check-keys: false
+
+  # Brackets - consistent spacing
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+
+  # Braces - consistent spacing
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+
+  # Allow duplicate keys (can happen with YAML anchors)
+  key-duplicates:
+    forbid-duplicated-merge-keys: true
+
+  # Octal values - quote them
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+
+  # Quoted strings - only when necessary
+  quoted-strings:
+    quote-type: double
+    required: only-when-needed
+
+# Ignore generated files and certain paths
+ignore: |
+  context/
+  _build/
+  .secrets.baseline
+
+
+
